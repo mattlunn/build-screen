@@ -13,13 +13,13 @@
 
 ### Running as Dev
  - Run `node index` from within the `server` directory to start the server.
- - Run `npm run start` from within the `client` directoy to start the front end. It should automatically open up a browser window, and "hot reload" should be enabled when editing any of the React files.
+ - Run `npm run start` from within the `client` directory to start the front end. It should automatically open up a browser window, and "hot reload" should be enabled when editing any of the React files.
 
 ### Running in Prod
  - Run `npm run build` from within the `client` directory. This will produce the built & minified CSS and JS files within `client/build`.
  - Run `node index` from within the `server` directory to start the server.
  
- Pass a comma separated list of projects as a `projects` query string parameter. You can also customise the refresh period by passing a `refresh` query string parameter (in seconds; default is 60). E.g, if I am running on port 3333;
+Pass a comma separated list of projects as a `projects` query string parameter. You can also customise the refresh period by passing a `refresh` query string parameter (in seconds; default is 60). E.g, if I am running on port 3333;
  
      http://localhost:3000/?projects=A,B,C&refresh=120
      
