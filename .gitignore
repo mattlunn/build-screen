@@ -1,0 +1,5 @@
+server/config.json
+client/build
+
+node_modules
+npm-debug.log

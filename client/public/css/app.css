@@ -1,0 +1,48 @@
+.history-item {
+  border-left-width: 15px;
+  background: #fff;
+}
+
+body, html {
+	background: #f7f7f9;
+}
+
+.panel-header {
+	margin: 10px 0 20px 0;
+}
+
+.loading-spinner {
+	position: fixed;
+	z-index: 999;
+	height: 2em;
+	width: 2em;
+	overflow: show;
+	margin: auto;
+	top: 0;
+	left: 0;
+	bottom: 0;
+	right: 0;
+	font-size: 80px;
+}
+
+.build-failure-info {
+	padding-left: 15px;
+}
+
+.build-failure-info li {
+	list-style-position: inside;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.build-failure-info li span {
+	position: relative;
+	left: -15px;
+}
+
+
+.card-block {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}

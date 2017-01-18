@@ -1,0 +1,9 @@
+{
+	"ntlmUsername": "MattLunn",
+	"ntlmPassword": "password1",
+	"ntlmDomain": "MyWorkDomain",
+	"tfsUrl": "http://tfs/tfs/",
+	"tfsCollection": "FTPDev",
+	"requestBackoffPeriodMs": 200,
+	"webPort": 3000
+}
