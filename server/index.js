@@ -11,6 +11,12 @@ const BuildStep = require('../common/domain/BuildStep');
 const BuildStatus = require('../common/domain/BuildStatus');
 const buildStatusCache = {};
 
+app.use(express.static('../client/build'));
+
+app.get('/', function (req, res) {
+	res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
+});
+
 // What follows is the biggest abuse of JavaScript the world has ever seen. I should be shot. I apologise.
 app.get('/data', function (req, res) {
 	var projects = (req.query.projects || '').split(/[;,]/g).filter(project => project.length);
