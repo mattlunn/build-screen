@@ -14,7 +14,7 @@ class Build extends Component {
 					{b.sourceId && (<p><a href="#">{b.id}</a> was started {this.formatTriggeredBy(b)}, using source version <a href="#">{b.sourceId}</a></p>)}
 					{b.buildGroup && (<p>Part of <a href="#">{b.buildGroup}</a></p>)}
 
-					{b.status !== BuildStatus.GREEN && b.steps.map((step, i) => <BuildStep name={step.name} key={i} status={step.status} issues={step.issues} />)}
+					{b.status !== BuildStatus.GREEN && b.steps.map((step, i) => <BuildStep name={step.name} key={i} status={step.status} issues={step.issues} tests={step.tests} />)}
 					
 					<div className="text-muted">{this.formatTime(b)}</div>
 				</div>

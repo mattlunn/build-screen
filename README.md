@@ -21,7 +21,7 @@
  
 Pass a comma separated list of projects as a `projects` query string parameter. You can also customise the refresh period by passing a `refresh` query string parameter (in seconds; default is 60). E.g, if I am running on port 3333;
  
-     http://localhost:3000/?projects=A,B,C&refresh=120
+     http://localhost:3333/?projects=A,B,C&refresh=120
      
 ... would show the build status of projects A, B and C, and refresh the statuses every 2 minutes.
 

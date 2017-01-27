@@ -69,111 +69,171 @@ app.get('/data', function (req, res) {
 	}
 
 	return Promise.all(projects.map((projectName) => {
-		return Promise.all([
-			tfs.get(projectName + '/_apis/release/releases?$expand=environments&api-version=2.2-preview.1').then(function (project) {
-				return Promise.all((project.value || []).map((release) => {
-					return Promise.all(release.environments.filter(environment => ['notStarted', 'canceled'].indexOf(environment.status) === -1).map((environment) => {
+		return tfs.get(projectName + '/_apis/test/runs?api-version=1.0&includerundetails=true').then(function (testRuns) {
+			var runsLookup = {
+				releases: {},
+				builds: {}
+			};
+
+			for (var i=0;i<testRuns.value.length;i++) {
+				var run = testRuns.value[i];
+
+				if (run.hasOwnProperty('releaseUri')) {
+					var releaseId = run.releaseUri.split('/').pop();
+					var environmentId = run.releaseEnvironmentUri.split('/').pop();
+
+					runsLookup.releases[releaseId] = runsLookup.releases[releaseId] || {};
+					runsLookup.releases[releaseId][environmentId] = runsLookup.releases[releaseId][environmentId] || [];
+					runsLookup.releases[releaseId][environmentId].push(run);
+				} else if (run.hasOwnProperty('build')) {
+					runsLookup.builds[run.build.id] = runsLookup.builds[run.build.id] || [];
+					runsLookup.builds[run.build.id].push(run);
+				}
+			}
+
+			return runsLookup;
+		}).then((runsLookup) => {
+			function addMatchingTestResults(buildStep, runs, response) {
+				if (runs.length === 1) {
+					var run = runs[0];
+
+					buildStep.tests = {
+						total: run.totalTests || 0,
+						passed: run.passedTests || 0,
+						ignored: run.notApplicableTests || 0,
+						failed: run.totalTests - run.passedTests - run.notApplicableTests
+					};
+				}
+			}
+
+			function addAnyMatchingTestResultsForReleaseStep(buildStep, releaseId, environmentId, response) {
+				if (runsLookup.releases.hasOwnProperty(releaseId) && runsLookup.releases[releaseId].hasOwnProperty(environmentId)) {
+					addMatchingTestResults(
+						buildStep,
+						runsLookup.releases[releaseId][environmentId].filter(run => run.startedDate > response.dateStarted && run.completedDate < response.dateEnded),
+						response);
+				}
+			}
+
+			function addAnyMatchingTestResultsForBuild(buildStep, buildId, response) {
+				if (runsLookup.builds.hasOwnProperty(buildId)) {
+					addMatchingTestResults(
+						buildStep,
+						runsLookup.builds[buildId].filter(run => run.startedDate > response.startTime && run.completedDate < response.finishTime),
+						response);
+				}
+			}
+
+			return Promise.all([
+				tfs.get(projectName + '/_apis/release/releases?$expand=environments&api-version=2.2-preview.1').then(function (project) {
+					return Promise.all((project.value || []).map((release) => {
+						return Promise.all(release.environments.filter(environment => ['notStarted', 'canceled'].indexOf(environment.status) === -1).map((environment) => {
+							var b = new Build();
+
+							b.id = release.id + '.' + environment.id;
+							b.buildGroup = release.name;
+							b.name = environment.name;
+							b.status = parseReleaseStatus(environment);
+							b.startedAt = new Date(release.createdOn);
+
+							if (b.status == BuildStatus.ORANGE || b.status == BuildStatus.RED) {
+								return tfs.getCached(projectName + '/_apis/release/releases/' + release.id + '/environments/' + environment.id + '/tasks?api-version=2.2-preview.1').then((details) => {
+									b.steps = (details.value ||[]).filter((step) => ['failure'].indexOf(step.status) !== -1).map((step) => {
+										var s = new BuildStep();
+
+										s.name = step.name;
+										s.status = parseReleaseResult(step.status);
+										s.issues = (step.issues || []).filter(issue => issue.issueType === 'Error').map((issue) => issue.message);
+
+										addAnyMatchingTestResultsForReleaseStep(s, release.id, environment.id, step);
+
+										return s;
+									});
+
+									return b;
+								}).then(() => b, (e) => { console.log(e); return b; });
+							}
+
+							return b;
+						}));
+					})).then(setOfReleases => {
+						var ret = [];
+
+						for (var i=0;i<setOfReleases.length;i++) {
+							ret = ret.concat(setOfReleases[i]);
+						}
+
+						return ret;
+					});
+				}),
+
+				tfs.get(projectName + '/_apis/build/builds?api-version=2.0').then(function (project) {
+					return Promise.all((project.value || []).map((build) => {
 						var b = new Build();
 
-						b.id = release.id + '.' + environment.id;
-						b.buildGroup = release.name;
-						b.name = environment.name;
-						b.status = parseReleaseStatus(environment);
-						b.startedAt = new Date(release.createdOn);
+						b.id = build.id;
+						b.name = build.definition.name;
+						b.status = parseBuildStatus(build);
+						b.sourceId = build.sourceVersion;
+						b.startedAt = new Date(build.startTime);
+
+						if (build.finishTime) {
+							b.finishedAt = new Date(build.finishTime);
+						}
+
+						if (build.reason === 'individualCI' || build.reason == 'batchedCI') {
+							b.triggeredBy = build.requestedFor.displayName;
+						}
 
 						if (b.status == BuildStatus.ORANGE || b.status == BuildStatus.RED) {
-							return tfs.getCached(projectName + '/_apis/release/releases/' + release.id + '/environments/' + environment.id + '/tasks?api-version=2.2-preview.1').then((details) => {
-								b.steps = (details.value ||[]).filter((step) => ['failure'].indexOf(step.status) !== -1).map((step) => {
-									var s = new BuildStep();
+							if (build.definition.type === 'build') {
+								return tfs.getCached(build._links.timeline.href).then((details) => {
+									b.steps = (details.records ||[]).filter((step) => ['failed', 'succeededWithIssues'].indexOf(step.result) !== -1 && step.parentId !== null).map((step) => {
+										var s = new BuildStep();
 
-									s.name = step.name;
-									s.status = parseReleaseResult(step.status);
-									s.issues = (step.issues || []).filter(issue => issue.issueType === 'Error').map((issue) => issue.message);
+										s.name = step.name;
+										s.status = parseBuildResult(step.result);
+										s.issues = (step.issues || []).filter(issue => issue.type === 'error').map((issue) => issue.message);
 
-									return s;
-								});
+										addAnyMatchingTestResultsForBuild(s, build.id, step);
 
-								return b;
-							}).then(() => b, () => b);
+										return s;
+									});
+
+									return b;
+								}).then(() => b, () => b);
+							}
 						}
 
 						return b;
 					}));
-				})).then(setOfReleases => {
-					var ret = [];
+				})
+			]).then(setsOfBuilds => {
+				var allBuilds = [];
+				var thisProjectsBuildStatusCache = (buildStatusCache[projectName] = buildStatusCache[projectName] || {});
 
-					for (var i=0;i<setOfReleases.length;i++) {
-						ret = ret.concat(setOfReleases[i]);
-					}
+				for (var i=0;i<setsOfBuilds.length;i++) {
+					var setOfBuilds = setsOfBuilds[i];
 
-					return ret;
-				});
-			}),
-
-			tfs.get(projectName + '/_apis/build/builds?api-version=2.0').then(function (project) {
-				return Promise.all((project.value || []).map((build) => {
-					var b = new Build();
-
-					b.id = build.id;
-					b.name = build.definition.name;
-					b.status = parseBuildStatus(build);
-					b.sourceId = build.sourceVersion;
-					b.startedAt = new Date(build.startTime);
-
-					if (build.finishTime) {
-						b.finishedAt = new Date(build.finishTime);
-					}
-
-					if (build.reason === 'individualCI' || build.reason == 'batchedCI') {
-						b.triggeredBy = build.requestedFor.displayName;
-					}
-
-					if (b.status == BuildStatus.ORANGE || b.status == BuildStatus.RED) {
-						if (build.definition.type === 'build') {
-							return tfs.getCached(build._links.timeline.href).then((details) => {
-								b.steps = (details.records ||[]).filter((step) => ['failed', 'succeededWithIssues'].indexOf(step.result) !== -1 && step.parentId !== null).map((step) => {
-									var s = new BuildStep();
-
-									s.name = step.name;
-									s.status = parseBuildResult(step.result);
-									s.issues = (step.issues || []).filter(issue => issue.type === 'error').map((issue) => issue.message);
-
-									return s;
-								});
-
-								return b;
-							}).then(() => b, () => b);
+					for (var j=setOfBuilds.length-1; j >= 0; j--) {
+						switch (setOfBuilds[j].status) {
+							case BuildStatus.ORANGE:
+							case BuildStatus.RED:					
+								thisProjectsBuildStatusCache[setOfBuilds[j].name] = setOfBuilds[j];
+							break;
+							case BuildStatus.GREEN:
+								delete thisProjectsBuildStatusCache[setOfBuilds[j].name];
 						}
+
+						allBuilds.push(setOfBuilds[j]);
 					}
-
-					return b;
-				}));
-			})
-		]).then(setsOfBuilds => {
-			var allBuilds = [];
-			var thisProjectsBuildStatusCache = (buildStatusCache[projectName] = buildStatusCache[projectName] || {});
-
-			for (var i=0;i<setsOfBuilds.length;i++) {
-				var setOfBuilds = setsOfBuilds[i];
-
-				for (var j=setOfBuilds.length-1; j >= 0; j--) {
-					switch (setOfBuilds[j].status) {
-						case BuildStatus.ORANGE:
-						case BuildStatus.RED:					
-							thisProjectsBuildStatusCache[setOfBuilds[j].name] = setOfBuilds[j];
-						break;
-						case BuildStatus.GREEN:
-							delete thisProjectsBuildStatusCache[setOfBuilds[j].name];
-					}
-
-					allBuilds.push(setOfBuilds[j]);
 				}
-			}
 
-			return {
-				builds: allBuilds,
-				needsAttention: Object.keys(thisProjectsBuildStatusCache).map(key => thisProjectsBuildStatusCache[key])
-			};
+				return {
+					builds: allBuilds,
+					needsAttention: Object.keys(thisProjectsBuildStatusCache).map(key => thisProjectsBuildStatusCache[key])
+				};
+			});
 		});
 	})).then(function (projectBuilds) {
 		var ret = {

@@ -58,6 +58,7 @@ class App extends Component {
 						step.name = props.name;
 						step.state = props.state;
 						step.issues = props.issues;
+						step.tests = props.tests;
 
 						return step;
 					});
