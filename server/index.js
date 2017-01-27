@@ -181,7 +181,7 @@ app.get('/data', function (req, res) {
 							b.finishedAt = new Date(build.finishTime);
 						}
 
-						if (build.reason === 'individualCI' || build.reason == 'batchedCI') {
+						if (['individualCI', 'batchedCI', 'manual'].indexOf(build.reason) !== -1) {
 							b.triggeredBy = build.requestedFor.displayName;
 						}
 
