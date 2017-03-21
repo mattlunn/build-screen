@@ -20,9 +20,15 @@ function processQueue() {
 			url: url
 		}, function (error, response) {
 			if (error) {
+				console.log('[' + (new Date()).toString() + ']: Error whilst requesting ' + url + ' (' + err.message +')');
 				curr.reject(error);
 			} else {
-				curr.resolve(JSON.parse(response.body));
+				try {
+					curr.resolve(JSON.parse(response.body));
+				} catch (e) {
+					console.log('[' + (new Date()).toString() + ']: Response for ' + url + ' was not valid JSON');
+					curr.reject(new Error('Invalid JSON'));
+				}
 			}
 
 			setTimeout(function () {

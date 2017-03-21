@@ -5,13 +5,14 @@ const fs = require('fs');
 const request = require('httpntlm');
 const express = require('express');
 const tfs = require('./tfs');
+const path = require('path');
 const app = express();
 const Build = require('../common/domain/Build');
 const BuildStep = require('../common/domain/BuildStep');
 const BuildStatus = require('../common/domain/BuildStatus');
 const buildStatusCache = {};
 
-app.use(express.static('../client/build'));
+app.use(express.static(__dirname + '/../client/build'));
 
 app.get('/', function (req, res) {
 	res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
