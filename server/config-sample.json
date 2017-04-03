@@ -1,9 +1,20 @@
 {
-	"ntlmUsername": "MattLunn",
-	"ntlmPassword": "password1",
-	"ntlmDomain": "MyWorkDomain",
-	"tfsUrl": "http://tfs/tfs/",
-	"tfsCollection": "FTPDev",
-	"requestBackoffPeriodMs": 200,
+	"tfs": [{
+		"url": "http://tfs:8080/tfs",
+		"collection": "Default",
+		"name": "On Prem TFS",
+		"credentials": {
+			"username": "MattLunn",
+			"password": "password",
+			"domain": "WORK"
+		},
+		"id": "140610"
+	}, {
+		"name": "VSTS",
+		"url": "http://example.visualstudio.com/",
+		"collection": "DefaultCollection",
+		"credentials": "pta",
+		"id": "0b064f"
+	}],
 	"webPort": 3000
 }
