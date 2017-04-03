@@ -93,6 +93,8 @@ app.get('/data', function (req, res) {
 		var [tfsInstanceId, projectName] = tfsInstanceAndprojectName.split(/:/);
 		var tfsInstance = tfsInstances[tfsInstanceId];
 
+		if (typeof tfsInstance === 'undefined') return [];
+
 		return tfsInstance.get(tfsInstance.endpoints.test, projectName + '/_apis/test/runs?api-version=1.0&includerundetails=true').then(function (testRuns) {
 			var runsLookup = {
 				releases: {},
