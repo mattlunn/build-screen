@@ -1,21 +1,41 @@
 'use strict';
 
-const config = require('./config');
 const fs = require('fs');
-const request = require('httpntlm');
+const path = require('path');
+const config = require('./config');
 const express = require('express');
 const tfs = require('./tfs');
-const path = require('path');
+const tfsInstances = config.tfs.reduce((last, curr) => (last[curr.id] = tfs.create(curr.url, curr.collection, curr.credentials)) && last, {});
 const app = express();
 const Build = require('../common/domain/Build');
 const BuildStep = require('../common/domain/BuildStep');
 const BuildStatus = require('../common/domain/BuildStatus');
+const Project = require('../common/domain/Project');
 const buildStatusCache = {};
 
 app.use(express.static(__dirname + '/../client/build'));
 
 app.get('/', function (req, res) {
 	res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
+});
+
+app.get('/projects', function (req, res, next) {
+	Promise.all(config.tfs.map((settings) => {
+		var tfsInstance = tfsInstances[settings.id];
+
+		return tfsInstance.get(tfsInstance.endpoints.projects, '_apis/projects').then((projects) => {
+			return {
+				id: settings.id,
+				name: settings.name,
+				projects: projects.value.map((project) => new Project(project.id, project.name, project.description))
+			};
+		});
+	})).then((data) => {
+		res.json(data).end();
+	}).catch((err) => {
+		console.log(err);
+		next(err);
+	});
 });
 
 // What follows is the biggest abuse of JavaScript the world has ever seen. I should be shot. I apologise.
@@ -69,8 +89,11 @@ app.get('/data', function (req, res) {
 		}
 	}
 
-	return Promise.all(projects.map((projectName) => {
-		return tfs.get(projectName + '/_apis/test/runs?api-version=1.0&includerundetails=true').then(function (testRuns) {
+	return Promise.all(projects.map((tfsInstanceAndprojectName) => {
+		var [tfsInstanceId, projectName] = tfsInstanceAndprojectName.split(/:/);
+		var tfsInstance = tfsInstances[tfsInstanceId];
+
+		return tfsInstance.get(tfsInstance.endpoints.test, projectName + '/_apis/test/runs?api-version=1.0&includerundetails=true').then(function (testRuns) {
 			var runsLookup = {
 				releases: {},
 				builds: {}
@@ -126,7 +149,7 @@ app.get('/data', function (req, res) {
 			}
 
 			return Promise.all([
-				tfs.get(projectName + '/_apis/release/releases?$expand=environments&api-version=2.2-preview.1').then(function (project) {
+				tfsInstance.get(tfsInstance.endpoints.release, projectName + '/_apis/release/releases?$expand=environments&api-version=2.2-preview.1').then(function (project) {
 					return Promise.all((project.value || []).map((release) => {
 						return Promise.all(release.environments.filter(environment => ['notStarted', 'canceled'].indexOf(environment.status) === -1).map((environment) => {
 							var b = new Build();
@@ -138,8 +161,8 @@ app.get('/data', function (req, res) {
 							b.startedAt = new Date(release.createdOn);
 
 							if (b.status == BuildStatus.ORANGE || b.status == BuildStatus.RED) {
-								return tfs.getCached(projectName + '/_apis/release/releases/' + release.id + '/environments/' + environment.id + '/tasks?api-version=2.2-preview.1').then((details) => {
-									b.steps = (details.value ||[]).filter((step) => ['failure'].indexOf(step.status) !== -1).map((step) => {
+								return tfsInstance.getCached(tfsInstance.endpoints.release, projectName + '/_apis/release/releases/' + release.id + '/environments/' + environment.id + '/tasks?api-version=2.2-preview.1').then((details) => {
+									b.steps = (details.value ||[]).filter((step) => ['failure', 'failed'].indexOf(step.status) !== -1).map((step) => {
 										var s = new BuildStep();
 
 										s.name = step.name;
@@ -168,7 +191,7 @@ app.get('/data', function (req, res) {
 					});
 				}),
 
-				tfs.get(projectName + '/_apis/build/builds?api-version=2.0').then(function (project) {
+				tfsInstance.get(tfsInstance.endpoints.build, projectName + '/_apis/build/builds?api-version=2.0').then(function (project) {
 					return Promise.all((project.value || []).map((build) => {
 						var b = new Build();
 
@@ -188,7 +211,7 @@ app.get('/data', function (req, res) {
 
 						if (b.status == BuildStatus.ORANGE || b.status == BuildStatus.RED) {
 							if (build.definition.type === 'build') {
-								return tfs.getCached(build._links.timeline.href).then((details) => {
+								return tfsInstance.getCached(tfsInstance.endpoints.build, build._links.timeline.href).then((details) => {
 									b.steps = (details.records ||[]).filter((step) => ['failed', 'succeededWithIssues'].indexOf(step.result) !== -1 && step.parentId !== null).map((step) => {
 										var s = new BuildStep();
 

@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "express": "^4.14.0",
-    "httpntlm": "^1.7.3"
+    "httpntlm": "^1.7.3",
+    "request": "^2.81.0"
   }
 }

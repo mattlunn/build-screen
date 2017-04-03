@@ -1,73 +1,94 @@
-const request = require('httpntlm');
-const config = require('./config');
 const urlParser = require('url');
-var queue = [];
-var cache = {};
-var curr;
 
-function processQueue() {
-	if (!curr && queue.length) {
-		curr = queue.pop();
-
-		var url = urlParser.resolve(config.tfsUrl + '/' + config.tfsCollection + '/', curr.url);
-		console.log('[' + (new Date()).toString() + ']: Making request to ' + url);
-
-		request.get({
-			username: config.ntlmUsername,
-			password: config.ntlmPassword,
-			domain: config.ntlmDomain,
-			workstation: 'My WorkStation',
-			url: url
-		}, function (error, response) {
-			if (error) {
-				console.log('[' + (new Date()).toString() + ']: Error whilst requesting ' + url + ' (' + err.message +')');
-				curr.reject(error);
-			} else {
-				try {
-					curr.resolve(JSON.parse(response.body));
-				} catch (e) {
-					console.log('[' + (new Date()).toString() + ']: Response for ' + url + ' was not valid JSON');
-					curr.reject(new Error('Invalid JSON'));
-				}
-			}
-
-			setTimeout(function () {
-				curr = undefined;
-				processQueue();
-			}, config.requestBackoffPeriodMs);
-		});
+class Tfs {
+	constructor(request, endpoints, credentials) {
+		this.request = request;
+		this.endpoints = endpoints;
+		this.credentials = credentials;
+		this.queue = [];
+		this.cache = {};
 	}
-}
 
-module.exports.get = function (url) {
-	return new Promise((resolve, reject) => {
-		queue.push({
-			resolve: resolve,
-			reject: reject,
-			url: url
-		});
-
-		processQueue();
-	});
-};
-
-module.exports.getCached = function (url) {
-	return new Promise((resolve, reject) => {
-		if (cache.hasOwnProperty(url)) {
-			console.log('[' + (new Date()).toString() + ']: Serving ' + url + ' from the cache...');
-
-			resolve(cache[url]);
-		} else {
-			queue.push({
-				resolve: function (obj) {
-					cache[url] = obj;
-					resolve(obj);
-				},
+	get(endpoint, url) {
+		return new Promise((resolve, reject) => {
+			this.queue.push({
+				resolve: resolve,
 				reject: reject,
-				url: url
+				url: urlParser.resolve(endpoint + '/', url)
 			});
 
-			processQueue();
+			this.processQueue();
+		});		
+	}
+
+	getCached(endpoint, url) {
+		return new Promise((resolve, reject) => {
+			if (this.cache.hasOwnProperty(url)) {
+				console.log('[' + (new Date()).toString() + ']: Serving ' + url + ' from the cache...');
+
+				resolve(this.cache[url]);
+			} else {
+				return this.get(endpoint, url).then((obj) => {
+					this.cache[url] = obj;
+					resolve(obj);
+				}, reject);
+			}
+		});
+	}
+
+	processQueue() {
+		if (!this.curr && this.queue.length) {
+			this.curr = this.queue.pop();
+
+			var opts = {
+				url: this.curr.url,
+				strictSSL: false
+			};
+
+			if (typeof this.credentials === 'string') {
+				opts.headers = {
+					Authorization: 'Basic ' + new Buffer(':' + this.credentials).toString('base64')
+				};
+			} else {
+				Object.assign(opts, this.credentials);
+			}
+
+			console.log('[' + (new Date()).toString() + ']: Making request to ' + this.curr.url);
+
+			this.request.get(opts, (error, response) => {
+				if (error) {
+					console.log('[' + (new Date()).toString() + ']: Error whilst requesting ' + this.curr.url + ' (' + error.message +')');
+					this.curr.reject(error);
+				} else {
+					try {
+						this.curr.resolve(JSON.parse(response.body));
+					} catch (e) {
+						console.log('[' + (new Date()).toString() + ']: Response for ' + this.curr.url + ' was not valid JSON');
+						console.log(response.body);
+						this.curr.reject(new Error('Invalid JSON'));
+					}
+				}
+
+				this.curr = undefined;
+				this.processQueue();
+			});
 		}
-	});
+	}
+};
+
+module.exports.create = function(host, collection, credentials) {
+	var endpoints = {};
+	var request = typeof credentials === 'string' 
+		? require('request')
+		: require('httpntlm');
+
+	['build', 'test', 'projects'].forEach((endpoint) => endpoints[endpoint] = urlParser.resolve(host + '/', collection));
+
+	if (host.indexOf('.visualstudio.com') === -1) {
+		endpoints.release = urlParser.resolve(host + '/', collection);
+	} else {
+		endpoints.release = urlParser.resolve(host.replace(/\.visualstudio\.com/, '.vsrm.visualstudio.com'), collection);
+	}
+
+	return new Tfs(request, endpoints, credentials);
 };
