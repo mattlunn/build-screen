@@ -13,6 +13,10 @@ class BuildStatus {
 		return 'in_progress';
 	}
 
+	static get QUEUED() {
+		return 'queued';
+	}
+
 	static get ORANGE() {
 		return 'orange';
 	}

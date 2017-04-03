@@ -23,6 +23,10 @@ class Build extends Component {
 	}
 
 	formatTime(build) {
+		if (build.status === BuildStatus.QUEUED) {
+			return (<span>Queued</span>);
+		}
+
 		if (build.status === BuildStatus.IN_PROGRESS) {
 			return (<span>Running for <Duration from={build.startedAt} /></span>);
 		}
@@ -70,6 +74,7 @@ class Build extends Component {
 			case BuildStatus.ORANGE:
 				return 'warning';
 			case BuildStatus.IN_PROGRESS:
+			case BuildStatus.QUEUED:
 				return 'info';
 			default:
 				return 'success';

@@ -1,5 +1,6 @@
 import React, { Component } from 'react';
 import Panel from './Panel';
+import Options from './Options';
 import jQuery from 'jquery';
 import Build from '../../../common/domain/Build';
 import BuildStep from '../../../common/domain/BuildStep';
@@ -14,19 +15,29 @@ class App extends Component {
 	parseOptions() {
 		var ret = {};
 		var provided = window.location.search.slice(1).split(/&/g).reduce((prev, curr) => {
-			var kvp = curr.split(/=/g);
-			prev[kvp[0]] = kvp[1];
+			var kvp = curr.split(/=/g).map(decodeURIComponent);
+
+			if (kvp[0].endsWith('[]')) {
+				var prop = kvp[0].slice(0, -2);
+
+				(prev[prop] || (prev[prop] = [])).push(kvp[1]);
+			}
+			
 			return prev;
 		}, {});
 
-		ret.projects = provided.projects || '';
+		ret.projects = provided.projects || [];
 		ret.refresh = (Math.max(60, isNaN(Number(provided.refresh)) ? 60 : Number(provided.refresh))) * 1000; // Force 1 minute as quickest refresh time
 
 		return ret;
 	}
 
 	componentDidMount() {
-		this.tick();
+		if (this.options.projects.length) {
+			this.tick();
+		} else {
+			this.showOptions();
+		}
 	}
 
 	componentWillUnmount() {
@@ -41,10 +52,19 @@ class App extends Component {
 		});
 	}
 
+	showOptions() {
+		jQuery.get('/projects').then((data) => {
+			this.setState({
+				loading: false,
+				options: data
+			});
+		});
+	}
+
 	tick() {
 		var self = this;
 
-		jQuery.get('/data', { projects: this.options.projects, now: Date.now() }).then(function (data) {
+		jQuery.get('/data', { projects: this.options.projects.join(','), now: Date.now() }).then((data) => {
 			function createModels(builds) {
 				return builds.map(props => {
 					var build = new Build();
@@ -67,8 +87,8 @@ class App extends Component {
 				});
 			}
 
-			for (var i=0;i<self.state.panels.length;i++) {
-				var panel = self.state.panels[i];
+			for (var i=0;i<this.state.panels.length;i++) {
+				var panel = this.state.panels[i];
 
 				switch (panel.props.name) {
 					case 'History':
@@ -83,7 +103,7 @@ class App extends Component {
 				}
 			}
 
-			self.setState({
+			this.setState({
 				loading: false
 			});
 		}).always(() => {
@@ -97,7 +117,7 @@ class App extends Component {
 			<div>
 				{this.state.loading && <div className="loading-spinner"><i className="fa fa-spinner fa-spin" aria-hidden="true"></i></div>}
 
-				<div className="container-fluid">
+				{!this.state.options && <div className="container-fluid">
 					<div className="col-sm-4">
 						<Panel ref={(panel) => this.registerPanel(panel)} name="History" icon="history" />
 					</div>
@@ -107,7 +127,9 @@ class App extends Component {
 					<div className="col-sm-4">
 						<Panel ref={(panel) => this.registerPanel(panel)} name="Queued" icon="hourglass-start" />
 					</div>
-				</div>
+				</div>}
+
+				{this.state.options && <Options options={this.state.options} />}
 			</div>
 		);
 	}

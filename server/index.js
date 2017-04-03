@@ -44,6 +44,8 @@ app.get('/data', function (req, res) {
 
 	function parseBuildStatus(build) {
 		switch (build.status) {
+			case 'notStarted':
+				return BuildStatus.QUEUED;
 			case 'inProgress':
 				return BuildStatus.IN_PROGRESS;
 			case 'cancelled':
@@ -56,6 +58,8 @@ app.get('/data', function (req, res) {
 
 	function parseReleaseStatus(release) {
 		switch (release.status) {
+			case 'notStarted':
+				return BuildStatus.QUEUED;
 			case 'rejected':
 				return BuildStatus.RED;
 			case 'succeeded':
@@ -269,8 +273,8 @@ app.get('/data', function (req, res) {
 		};
 
 		for (var i=0;i<projectBuilds.length;i++) {
-			ret.history = ret.history.concat(projectBuilds[i].builds.filter(build => build.status != BuildStatus.IN_PROGRESS));
-			ret.queued = ret.queued.concat(projectBuilds[i].builds.filter(build => build.status == BuildStatus.IN_PROGRESS));
+			ret.history = ret.history.concat(projectBuilds[i].builds.filter(build => build.status != BuildStatus.IN_PROGRESS && build.status != BuildStatus.QUEUED));
+			ret.queued = ret.queued.concat(projectBuilds[i].builds.filter(build => build.status == BuildStatus.IN_PROGRESS || build.status == BuildStatus.QUEUED));
 			ret.needsAttention = ret.needsAttention.concat(projectBuilds[i].needsAttention);
 		}
 
