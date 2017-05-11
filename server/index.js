@@ -195,6 +195,9 @@ app.get('/data', function (req, res) {
 
 						return ret;
 					});
+				}).then(null, (err) => {
+					console.log(err);
+					return [];
 				}),
 
 				tfsInstance.get(tfsInstance.endpoints.build, projectName + '/_apis/build/builds?api-version=2.0').then(function (project) {
@@ -237,7 +240,10 @@ app.get('/data', function (req, res) {
 
 						return b;
 					}));
-				})
+				}).then(null, (err) => {
+					console.log(err);
+					return [];
+				}),
 			]).then(setsOfBuilds => {
 				var allBuilds = [];
 				var thisProjectsBuildStatusCache = (buildStatusCache[projectName] = buildStatusCache[projectName] || {});
