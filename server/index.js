@@ -97,7 +97,12 @@ app.get('/data', function (req, res) {
 		var [tfsInstanceId, projectName] = tfsInstanceAndprojectName.split(/:/);
 		var tfsInstance = tfsInstances[tfsInstanceId];
 
-		if (typeof tfsInstance === 'undefined') return [];
+		if (typeof tfsInstance === 'undefined') {
+			return {
+				builds: [],
+				needsAttention: []
+			};
+		}
 
 		return tfsInstance.get(tfsInstance.endpoints.test, projectName + '/_apis/test/runs?api-version=1.0&includerundetails=true').then(function (testRuns) {
 			var runsLookup = {
@@ -294,7 +299,10 @@ app.get('/data', function (req, res) {
 		ret.history.splice(20);
 
 		res.json(ret).end();
-	}).catch((err) => console.log(err));
+	}).catch((err) => {
+		console.log(err);
+		res.status(500).end();
+	});
 });
 
 app.listen(config.webPort, function () {
