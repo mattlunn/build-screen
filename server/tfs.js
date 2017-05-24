@@ -70,7 +70,10 @@ class Tfs {
 				}
 
 				this.curr = undefined;
-				this.processQueue();
+
+				setTimeout(() => {
+					this.processQueue();
+				}, 100);
 			});
 		}
 	}
