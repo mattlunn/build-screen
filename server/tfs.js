@@ -1,4 +1,8 @@
+const Cache = require('file-system-cache').default;
 const urlParser = require('url');
+const cache = Cache({
+	basePath: __dirname + '/cache'
+});
 
 class Tfs {
 	constructor(request, endpoints, credentials) {
@@ -6,7 +10,6 @@ class Tfs {
 		this.endpoints = endpoints;
 		this.credentials = credentials;
 		this.queue = [];
-		this.cache = {};
 	}
 
 	get(endpoint, url) {
@@ -14,6 +17,7 @@ class Tfs {
 			this.queue.push({
 				resolve: resolve,
 				reject: reject,
+				cache: false,
 				url: urlParser.resolve(endpoint + '/', url)
 			});
 
@@ -23,22 +27,60 @@ class Tfs {
 
 	getCached(endpoint, url) {
 		return new Promise((resolve, reject) => {
-			if (this.cache.hasOwnProperty(url)) {
-				console.log('[' + (new Date()).toString() + ']: Serving ' + url + ' from the cache...');
+			this.queue.push({
+				resolve: resolve,
+				reject: reject,
+				cache: true,
+				url: urlParser.resolve(endpoint + '/', url)
+			});
 
-				resolve(this.cache[url]);
-			} else {
-				return this.get(endpoint, url).then((obj) => {
-					this.cache[url] = obj;
-					resolve(obj);
-				}, reject);
-			}
+			this.processQueue();
 		});
 	}
 
 	processQueue() {
+		function complete(error, response) {
+			if (error) {
+				console.log('[' + (new Date()).toString() + ']: Error whilst requesting ' + this.curr.url + ' (' + error.message +')');
+				this.curr.reject(error);
+			} else {
+				try {
+					this.curr.resolve(JSON.parse(response.body));
+				} catch (e) {
+					console.log('[' + (new Date()).toString() + ']: Response for ' + this.curr.url + ' was not valid JSON');
+					console.log(response.body);
+					this.curr.reject(new Error('Invalid JSON'));
+				}
+			}
+
+			var shouldCache = this.curr.cache;
+
+			if (shouldCache) {
+				cache.set(this.curr.url, response);
+			}
+
+			this.curr = undefined;
+
+			if (shouldCache) {
+				this.processQueue();
+			} else {
+				setTimeout(() => {
+					this.processQueue();
+				}, 100);
+			}
+		}
+
 		if (!this.curr && this.queue.length) {
 			this.curr = this.queue.pop();
+
+			if (this.curr.cache) {
+				var cached = cache.getSync(this.curr.url);
+
+				if (cached !== undefined) {
+					console.log('[' + (new Date()).toString() + ']: ' + this.curr.url + ' has been served from the cache');
+					return complete.call(this, null, cached);
+				}
+			}
 
 			var opts = {
 				url: this.curr.url,
@@ -55,26 +97,7 @@ class Tfs {
 
 			console.log('[' + (new Date()).toString() + ']: Making request to ' + this.curr.url);
 
-			this.request.get(opts, (error, response) => {
-				if (error) {
-					console.log('[' + (new Date()).toString() + ']: Error whilst requesting ' + this.curr.url + ' (' + error.message +')');
-					this.curr.reject(error);
-				} else {
-					try {
-						this.curr.resolve(JSON.parse(response.body));
-					} catch (e) {
-						console.log('[' + (new Date()).toString() + ']: Response for ' + this.curr.url + ' was not valid JSON');
-						console.log(response.body);
-						this.curr.reject(new Error('Invalid JSON'));
-					}
-				}
-
-				this.curr = undefined;
-
-				setTimeout(() => {
-					this.processQueue();
-				}, 100);
-			});
+			this.request.get(opts, complete.bind(this));
 		}
 	}
 };

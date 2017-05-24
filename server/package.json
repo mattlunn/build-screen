@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "express": "^4.14.0",
+    "file-system-cache": "^1.0.5",
     "httpntlm": "^1.7.3",
     "request": "^2.81.0"
   }
