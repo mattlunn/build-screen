@@ -248,7 +248,7 @@ app.get('/data', function (req, res) {
 				}).then(null, (err) => {
 					console.log(err);
 					return [];
-				}),
+				})
 			]).then(setsOfBuilds => {
 				var allBuilds = [];
 				var thisProjectsBuildStatusCache = (buildStatusCache[projectName] = buildStatusCache[projectName] || {});
