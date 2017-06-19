@@ -19,9 +19,9 @@
  - Run `npm run build` from within the `client` directory. This will produce the built & minified CSS and JS files within `client/build`.
  - Run `node index` from within the `server` directory to start the server.
  
-Pass a comma separated list of projects as a `projects` query string parameter. You can also customise the refresh period by passing a `refresh` query string parameter (in seconds; default is 60). E.g, if I am running on port 3333;
+Pass a comma separated list of projects as a `projects` query string parameter. The format of each project should be "TFS_ID:PROJECT_NAME", where "TFS_ID" is the ID of the TFS instance defined in `config.json` and "PROJECT_NAME" is the name (or GUID) of the TFS project. You can also customise the refresh period by passing a `refresh` query string parameter (in seconds; default is 60). E.g, if I am running on port 3333;
  
-     http://localhost:3333/?projects=A,B,C&refresh=120
+     http://localhost:3333/?projects=104610:A,0b064f:B,104610:C&refresh=120
      
 ... would show the build status of projects A, B and C, and refresh the statuses every 2 minutes.
 
