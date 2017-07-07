@@ -39,7 +39,16 @@ class Tfs {
 	}
 
 	processQueue() {
+		var curr;
+
 		function complete(error, response) {
+			clearTimeout(curr.timeout);
+
+			// Queue has already moved on from this request. complete() has been (incorrectly, or due to request#2475 bug) called twice for this request.
+			if (curr !== this.curr) {
+				return;
+			}
+
 			if (error) {
 				console.log('[' + (new Date()).toString() + ']: Error whilst requesting ' + this.curr.url + ' (' + error.message +')');
 				this.curr.reject(error);
@@ -71,7 +80,7 @@ class Tfs {
 		}
 
 		if (!this.curr && this.queue.length) {
-			this.curr = this.queue.pop();
+			curr = this.curr = this.queue.pop();
 
 			if (this.curr.cache) {
 				var cached = cache.getSync(this.curr.url);
@@ -98,6 +107,9 @@ class Tfs {
 			console.log('[' + (new Date()).toString() + ']: Making request to ' + this.curr.url);
 
 			this.request.get(opts, complete.bind(this));
+			this.curr.timeout = setTimeout(() => {
+				complete.call(this, new Error('callback not called; https://github.com/request/request/issues/2475'));
+			}, 60 * 1000);
 		}
 	}
 };
